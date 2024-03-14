@@ -1,5 +1,5 @@
 const express = require('express')
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors')
 require('dotenv').config()
 const app = express()
@@ -7,8 +7,8 @@ const port = process.env.PORT || 5000
 
 // MeddleWare
 app.use(cors({
-    origin:'http://localhost:5173',
-    credentials:true
+    origin: 'http://localhost:5173',
+    credentials: true
 }))
 app.use(express.json())
 
@@ -31,36 +31,109 @@ async function run() {
         await client.connect();
 
         const shoesCollection = client.db("shoesDB").collection("shoes")
+        const myCartCollection = client.db("shoesDB").collection("myCart")
 
+        // app.get('/api/v1/shoes', async (req, res) => {
+        //     try {
+        //         let query = {}
+        //         let sortObj = {}
+        //         const category = req.query.category
+        //         const company = req.query.company
+        //         const color = req.query.color
+        //         const price = req.query.price
+        //         console.log(price);
+        //         // Sorting
+        //         const sortField = req.query.sortField;
+        //         const sortOrder = req.query.sortOrder;
+        //         if(company){
+        //             query.company = company
+        //         }
+        //         if(category) {
+        //             query.category = category
+        //         }
+        //         if(color) {
+        //             query.color = color
+        //         }
+        //         if(price) {
+        //             query = {price:{$eq:price}}
+        //         }
+
+        //         if (sortField && sortOrder) {
+        //             sortObj[sortField] = sortOrder
+        //         }
+
+        //         const cursor = shoesCollection.find(query).sort(sortObj)
+        //         const result = await cursor.toArray()
+        //         res.send(result)
+        //     }
+        //     catch (error) {
+        //         res.status(500).send({ message: error.message })
+        //     }
+        // })
+
+        // 
         app.get('/api/v1/shoes', async (req, res) => {
             try {
-                let query = {}
-                let sortObj = {}
-                const category = req.query.category
-                const company = req.query.company
-                const color = req.query.color
-                const sortField = req.query.sortField;
-                const sortOrder = req.query.sortOrder;
-                if(company){
-                    query.company = company
-                }
-                if(category) {
-                    query.category = category
-                }
-                if(color) {
-                    query.color = color
+                let query = {};
+                let sortObj = {};
+                let priceConditions = [];
+
+                // Extracting query parameters
+                const { category, company, color, price, sortField, sortOrder } = req.query;
+
+                // Adding query parameters to the MongoDB query
+                if (company) query.company = company;
+                if (category) query.category = category;
+                if (color) query.color = color;
+
+                // Constructing price conditions
+                if (price) {
+                    priceConditions.push({ price: { $eq: parseInt(price) } }); // Price equals
+                    priceConditions.push({ price: { $lt: parseInt(price) } }); // Price less than
                 }
 
-                if (sortField && sortOrder) {
-                    sortObj[sortField] = sortOrder
+                // Combining price conditions using $or operator
+                if (priceConditions.length > 0) {
+                    query.$or = priceConditions;
                 }
-               
-                const cursor = shoesCollection.find(query).sort(sortObj)
-                const result = await cursor.toArray()
-                res.send(result)
+
+                // Building sort object for MongoDB
+                if (sortField && sortOrder) {
+                    sortObj[sortField] = sortOrder; // Parse sortOrder to integer
+                }
+
+                // Fetching shoes data based on query and sorting
+                const cursor = shoesCollection.find(query).sort(sortObj);
+                const result = await cursor.toArray();
+
+                res.json(result);
+            } catch (error) {
+                res.status(500).json({ message: error.message });
+            }
+        });
+
+        app.get('/api/v1/shoes/:id', async (req, res) => {
+            try {
+                const id = req.params.id
+                // console.log(id);
+                const query = { _id: new ObjectId(id) }
+                // console.log(query);
+                const result = await shoesCollection.findOne(query)
+                res.json(result)
             }
             catch (error) {
-                res.status(500).send({ message: error.message })
+                res.status(500).json({ message: error.message });
+            }
+        })
+
+        app.post('/api/v1/user/myCart', async (req, res) => {
+            try { 
+                const myCart = req.body
+                const result = await myCartCollection.insertOne(myCart)
+                res.json(result)
+            }
+            catch (error) {
+                res.status(500).json({ message: error.message });
             }
         })
 
